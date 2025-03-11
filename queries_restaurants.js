@@ -25,7 +25,7 @@ db.restaurants.find({ "grades.score": { $gt: 90 } }).pretty();
 
 db.restaurants.find(
   { "grades.score": { $gt: 90 } }, 
-  { name: 1, "grades": { $elemMatch: { score: { $gt: 90 } } }, _id: 0 }
+  { name: 1, grades: { $elemMatch: { score: { $gt: 90 } } }, _id: 0 }
 ).pretty();
 
 
@@ -35,7 +35,7 @@ db.restaurants.find({ "grades.score": { $gt: 80, $lt: 100 } }).pretty();
 
 db.restaurants.find(
   { "grades.score": { $gt: 80, $lt: 100 } },
-  { name: 1, "grades": { $elemMatch: { score: { $gt: 80, $lt: 100 } } }, _id: 0 }
+  { name: 1, grades: { $elemMatch: { score: { $gt: 80, $lt: 100 } } }, _id: 0 }
 ).pretty();
 
 
@@ -45,7 +45,7 @@ db.restaurants.find({ "address.coord.1": { $lt: -95.754168 } }).pretty();
 // 11. Encuentra los restaurantes que no preparan ningún cuisine de 'American' y su calificación es superior a 70
 // y longitud inferior a -65.754168.
 db.restaurants.find({
-  cuisine: { $ne: "American" },
+  cuisine: { $not: /American/ },
   "grades.score": { $gt: 70 },
   "address.coord.0": { $lt: -65.754168 }
 }).pretty();
@@ -53,7 +53,7 @@ db.restaurants.find({
 // 12. Encuentra los restaurantes que no preparan ningún cuisine de 'American' y consiguieron un marcador más de 70
 // y localizado en la longitud menor que -65.754168 (sin usar $and).
 db.restaurants.find({
-  cuisine: { $ne: "American" },
+  cuisine: { $not: /American/ },
   "grades.score": { $gt: 70 },
   "address.coord.0": { $lt: -65.754168 }
 }).pretty();
@@ -61,10 +61,11 @@ db.restaurants.find({
 // 13. Encuentra los restaurantes que no preparan ningún cuisine de 'American' y obtuvieron un punto de grado 'A' 
 // no pertenece a Brooklyn. Ordenados por cuisine en orden descendente.
 db.restaurants.find({
-  cuisine: { $ne: "American" },
+  cuisine: { $not: /American/ },
   "grades.grade": "A",
-  borough: { $ne: "Brooklyn" }
-}).sort({ cuisine: -1 }).pretty();
+	borough: {$not: /Brookly/}
+  }).sort({cuisine: -1}).pretty();
+
 
 // 14. Encuentra el restaurant_id, name, borough y cuisine para aquellos restaurantes que contienen 'Wil'
 // como las tres primeras letras en su nombre.
@@ -81,9 +82,8 @@ db.restaurants.find({ name: /Reg/ }, { restaurant_id: 1, name: 1, borough: 1, cu
 // 17. Encuentra los restaurantes que pertenecen al Bronx y prepararon cualquier plato americano o chino.
 db.restaurants.find({
   borough: "Bronx",
-  cuisine: { $in: ["American", "Chinese"] }
+  cuisine: { $regex: /(American|Chinese)/i } 
 }).pretty();
-
 // 18. Encuentra el restaurant_id, name, borough y cuisine para aquellos restaurantes que pertenecen a
 // Staten Island, Queens, Bronx o Brooklyn.
 db.restaurants.find({
@@ -101,10 +101,11 @@ db.restaurants.find({
 db.restaurants.find({ "grades.score": { $lte: 10 } }, { restaurant_id: 1, name: 1, borough: 1, cuisine: 1, _id: 0 }).pretty();
 
 // 21. Encuentra el restaurant_id, name, borough y cuisine para aquellos restaurantes que preparan pescado
-// excepto 'American' y 'Chinees' o el name del restaurante empieza con letras 'Wil'.
+// excepto 'American' y 'Chinese' o el name del restaurante empieza con letras 'Wil'.
 db.restaurants.find({
-  $or: [
-    { cuisine: { $nin: ["American", "Chinees"]}},
+  $or: [{$and:
+	 [ {cuisine:/Fish/},
+    { cuisine: { $not: /American|Chinese/}}]},
     { name: /^Wil/ }
   ]
 }, { restaurant_id: 1, name: 1, borough: 1, cuisine: 1, _id: 0 }).pretty();
@@ -144,11 +145,18 @@ db.restaurants.find().sort({ name: 1 }).pretty();
 db.restaurants.find().sort({ name: -1 }).pretty();
 
 // 27. Organiza el nombre de la cuisine en orden ascendente y por el mismo barrio de cuisine en orden descendente.
-db.restaurants.find().sort({ cuisine: 1, borough: -1 }).pretty();
+db.restaurants.aggregate([
+  { $group: { _id: "$borough", cuisines: { $addToSet: "$cuisine" } } },
+  { $sort: { _id: -1 } },
+  { $project: { _id: 0, borough: '$_id', cuisines: { $sortArray: { input: "$cuisines", sortBy: 1 } } } }
+]);
 
 // 28. Encuentra todas las direcciones que no contienen la calle.
-db.restaurants.find({ "address.street": { $exists: false } }).pretty();
-
+db.restaurants.find({
+	$or: [{ 
+	'address.street': { $exists: false } },
+	{ 'address.street': "" },{'address.street': undefined},
+	{'address.street': null}]}, { _id: 0, address: 1 });
 // 29. Selecciona todos los documentos en la colección de restaurantes donde el valor del campo coord es Double.
 db.restaurants.find({ "address.coord": { $type: "double" } }).pretty();
 
